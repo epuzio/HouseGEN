@@ -1,5 +1,6 @@
-import requests, sys, pandas as pd, os
+import requests, sys, pandas as pd, os, tensorflow as tf
 from bs4 import BeautifulSoup
+from tensorflow.io import TFRecordWriter
 
 '''
 Web scraper to get images from Zillow. 
@@ -40,34 +41,52 @@ def scrape_zillow(locations):
         df = pd.DataFrame(urls)
         df.to_csv("zillow_urls.csv", mode="a", header=False, index=False)
 
+
+# def read_tensor_from_image_url(url,
+#                                input_height=299,
+#                                input_width=299,
+#                                input_mean=0,
+#                                input_std=255):
+#     image_reader = tf.image.decode_jpeg(
+#         requests.get(url).content, channels=3, name="jpeg_reader")
+#     img_as_binary = tf.cast(image_reader, tf.float32)
+#     dims_expander = tf.expand_dims(float_caster, 0)
+#     resized = tf.image.resize_bilinear(dims_expander, [input_height, input_width])
+#     normalized = tf.divide(tf.subtract(resized, [input_mean]), [input_std])
+
+#     with tf.Session() as sess:
+#         return sess.run(normalized)
+
 def csv2tfr():
-    # Load the CSV file into a DataFrame
-    df = pd.read_csv('your_csv_file.csv')
+    df = pd.read_csv('zillow_urls.csv') #dataframe to store csv file
+    os.makedirs('images', exist_ok=True) #make directory if one doesn't exist
+    county_name = ""
+    n_img = 0
 
-    # Create a directory to store the images
-    os.makedirs('images', exist_ok=True)
-
-    # Download each image from the URLs in the DataFrame
-    for index, row in df.iterrows():
-        url = row['Image URL']
-        image_name = url.split('/')[-1]
-        image_path = f'images/{image_name}'
-
-        # Download the image
-        response = requests.get(url)
-        if response.status_code == 200:
-            with open(image_path, 'wb') as f:
-                f.write(response.content)
-            print(f'Downloaded: {image_path}')
+    for index, row in df.iterrows(): #for each row in csv
+        if row["URL"].startswith("#"): #change name
+            county_name = row["URL"][5:]
+            n_img = 0
         else:
-            print(f'Failed to download: {url}')
+            image_name = county_name + f'_{n_img}.jpg'
+            image_path = f'images/{image_name}'
+
+            response = requests.get(row["URL"])
+            if response.status_code == 200:
+                with open(image_path, 'wb') as f:
+                    f.write(response.content)
+                n_img += 1
+            else:
+                print(f'Failed to download: {row["Image URL"]}')
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("To scrape url by location: python3 scraper.py county-st county-st...")
+        print("To convert csv to tfr: python3 scraper.py csv2tfr")
     else:
-        locations = sys.argv[1:]
-        scrape_zillow(locations)
-
-    #cities: Lake-Havasu-City AZ, dolan springs az
+        if sys.argv[1] == "csv2tfr":
+            csv2tfr()
+        else:
+            locations = sys.argv[1:]
+            scrape_zillow(locations)
