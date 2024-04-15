@@ -9,7 +9,6 @@ If 403 error encountered, use a virtual environment and/or switch the header.
 def scrape_zillow(locations):
     urls = []
     search = ["fsbo", "for_sale"] #for sale by owner, foreclosure, for sale
-    # search = ["for_sale"] #for sale by owner, foreclosure, for sale
     for l in locations:
         with open("zillow_urls.csv", "a") as file:
             file.write(f"# -- {l}\n")
