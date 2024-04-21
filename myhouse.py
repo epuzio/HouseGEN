@@ -4,7 +4,7 @@ import tensorflow_datasets as tfds
 from tensorflow.keras import layers
 from tensorflow.keras import losses
 import numpy as np
-# from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 import cv2
 import os
 import time
@@ -112,19 +112,19 @@ def train_step(image_batch, generator, discriminator, generator_optimizer, discr
     generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
     discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
   
-# def generate_and_save_images(model, epoch, test_input):
-#   predictions = model(test_input, training=False)
-#   for i in range(predictions.shape[0]): #for each image in the batch
-#     plt.imshow(predictions[i, :, :, :]*0.5 + 0.5)
-#     plt.axis('off')
-#     plt.savefig(f"GAN_output_images/img{i}/image{i}_epoch_{epoch:04d}.png")
-#     plt.clf()  #clear the current figure to prevent overlapping plots
-
 def generate_and_save_images(model, epoch, test_input):
-    predictions = model(test_input, training=False)
-    for i in range(predictions.shape[0]):  #for each image in the batch
-        image = ((predictions[i, :, :, :] * 0.5 + 0.5) * 255).astype(np.uint8)
-        cv2.imwrite(f"GAN_output_images/img{i}/image{i}_epoch_{epoch:04d}.png", image)
+  predictions = model(test_input, training=False)
+  for i in range(predictions.shape[0]): #for each image in the batch
+    plt.imshow(predictions[i, :, :, :]*0.5 + 0.5)
+    plt.axis('off')
+    plt.savefig(f"GAN_output_images/img{i}/image{i}_epoch_{epoch:04d}.png")
+    plt.clf()  #clear the current figure to prevent overlapping plots
+
+# def generate_and_save_images(model, epoch, test_input):
+#     predictions = model(test_input, training=False)
+#     for i in range(predictions.shape[0]):  #for each image in the batch
+#         image = ((predictions[i, :, :, :] * 0.5 + 0.5) * 255).astype(np.uint8)
+#         cv2.imwrite(f"GAN_output_images/img{i}/image{i}_epoch_{epoch:04d}.png", image)
   
 def make_output_directories(examples_to_generate):
   '''
@@ -213,7 +213,7 @@ def train():
       train_step(image_batch, generator, discriminator, generator_optimizer, discriminator_optimizer)
 
     print("Saving images at epoch:", epoch)
-    if (epoch + 1) % 2 == 0: #save every 10 epochs
+    if (epoch) % 2 == 0: #save every 10 epochs
       display.clear_output(wait=True)
       generate_and_save_images(generator,
                               epoch + 1,
@@ -221,7 +221,7 @@ def train():
 
     # Save the model every 25 epochs
     print("Saving checkpoint of model...")
-    if (epoch + 1) % 15 == 0:
+    if (epoch + 1) % 10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
       print("Checkpoint saved successfully to file:", checkpoint_dir)
 
