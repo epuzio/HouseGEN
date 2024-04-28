@@ -2,6 +2,8 @@ import requests, sys, pandas as pd, os, tensorflow as tf, time, numpy as np
 from bs4 import BeautifulSoup
 from PIL import Image
 import io
+from matplotlib import pyplot as plt
+import imghdr
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Example, Features, Feature, BytesList
 
@@ -54,11 +56,6 @@ def csv2tfr(tfrecord=True):
     n_img = 0
     n_counties = 0
     lines = 0
-    with open("Bar.jpg", "rb") as f: #unfathomably naive
-        bar_image_data = f.read()
-    bar_image = tf.io.decode_jpeg(bar_image_data, channels=3)
-    print("Bar image shape:", bar_image.shape)
-
     with open("zillow_urls.csv", 'r') as file: #print number of URLs
         for f in file:
             if f[0] == "#":
@@ -83,22 +80,22 @@ def csv2tfr(tfrecord=True):
                             f.write(response.content)
                     else: #save as tfrecord
                         image = tf.io.decode_jpeg(response.content, channels=3)
-                        img_with_bar = tf.image.resize(tf.concat([image, bar_image], axis=0), [512, 512])
-                        img_with_bar_np = img_with_bar.numpy().astype(np.uint8)
-                        img_with_bar_pil = Image.fromarray(img_with_bar_np)
-                        with io.BytesIO() as output:
-                            img_with_bar_pil.save(output, format="JPEG")
-                            jpeg_data = output.getvalue()
+                        # plt.imshow(image)
+                        # plt.savefig(f"./testimgoutput0.jpg")
+                        # print("dims: ", tf.shape(image))
+                        image_with_bar = tf.image.pad_to_bounding_box(
+                            image, 150, 0, 596, 596
+                        )
+                        # plt.imshow(image_with_bar)
+                        # plt.savefig(f"./testimgoutput1.jpg")
+                        image_with_bar_resized = tf.image.resize(image_with_bar, [512, 512])
+                        image_with_bar_resized = tf.cast(image_with_bar_resized, np.uint8)
+                        encoded_image = tf.image.encode_jpeg(image_with_bar_resized, format='rgb')
 
-                        # Create the TFRecord feature with the JPEG data
                         feature = {
-                            'image': Feature(bytes_list=BytesList(value=[jpeg_data]))
+                            'image': Feature(bytes_list=tf.train.BytesList(value=[encoded_image.numpy()]))
                         }
-                        # img_with_bar = tf.cast(img_with_bar, tf.uint8)
-                        # feature = {
-                        #     'image': Feature(bytes_list=BytesList(value=[img_with_bar.numpy().tobytes()]))
-                        # }
-                        example = Example(features=Features(feature=feature))
+                        example = tf.train.Example(features=tf.train.Features(feature=feature))
                         tfr_example = example.SerializeToString()
                         writer.write(tfr_example)
                     n_img += 1
