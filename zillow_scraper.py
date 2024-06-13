@@ -1,11 +1,11 @@
-import requests, sys, pandas as pd, os, tensorflow as tf, time, numpy as np
+import requests, sys, pandas as pd, os, tensorflow as tf, time, numpy as np, zipfile
 from bs4 import BeautifulSoup
 from PIL import Image
 import io
-from matplotlib import pyplot as plt
-import imghdr
+from io import BytesIO
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Example, Features, Feature, BytesList
+import imageio
 
 '''
 Web scraper to get images from Zillow. 
@@ -46,9 +46,28 @@ def scrape_zillow(locations):
         df = pd.DataFrame(urls)
         df.to_csv("zillow_urls.csv", mode="a", header=False, index=False)
 
+def zip_files():
+    """
+    Zips all images in output_images to a .zip file
+    """
+    with zipfile.ZipFile("output_training_set_png.zip", "w") as zipf:
+        for img in os.listdir("images"):
+            if img.endswith(".jpg"):
+                # Open the image
+                image_path = os.path.join("images", img)
+                image = Image.open(image_path)
 
+                # Convert to PNG and save to BytesIO object
+                png_data = BytesIO()
+                image.save(png_data, format="PNG")
+                png_data.seek(0)
 
-def csv2tfr(tfrecord=True):
+                # Add the PNG data to the ZIP file
+                png_filename = os.path.splitext(img)[0] + ".png"
+                zipf.writestr(png_filename, png_data.read())
+                
+
+def csv2img(tfrecord=False):
     df = pd.read_csv('zillow_urls.csv') #dataframe to store csv file
     os.makedirs('images', exist_ok=True) #make directory if one doesn't exist
     os.makedirs('tfr', exist_ok=True) #make directory if one doesn't exist
@@ -56,6 +75,11 @@ def csv2tfr(tfrecord=True):
     n_img = 0
     n_counties = 0
     lines = 0
+    with open("Bar.jpg", "rb") as f: #unfathomably naive
+        bar_image_data = f.read()
+    bar_image = tf.io.decode_jpeg(bar_image_data, channels=3)
+    print("Bar image shape:", bar_image.shape)
+
     with open("zillow_urls.csv", 'r') as file: #print number of URLs
         for f in file:
             if f[0] == "#":
@@ -75,41 +99,74 @@ def csv2tfr(tfrecord=True):
                 image_path = f'images/{image_name}'
                 response = requests.get(row["URL"])
                 if response.status_code == 200:
-                    if not tfrecord: #save as jpg
-                        with open(image_path, 'wb') as f:
-                            f.write(response.content)
-                    else: #save as tfrecord
-                        image = tf.io.decode_jpeg(response.content, channels=3)
-                        # plt.imshow(image)
-                        # plt.savefig(f"./testimgoutput0.jpg")
-                        # print("dims: ", tf.shape(image))
-                        image_with_bar = tf.image.pad_to_bounding_box(
-                            image, 150, 0, 596, 596
-                        )
-                        # plt.imshow(image_with_bar)
-                        # plt.savefig(f"./testimgoutput1.jpg")
-                        image_with_bar_resized = tf.image.resize(image_with_bar, [512, 512])
-                        image_with_bar_resized = tf.cast(image_with_bar_resized, np.uint8)
-                        encoded_image = tf.image.encode_jpeg(image_with_bar_resized, format='rgb')
-
-                        feature = {
-                            'image': Feature(bytes_list=tf.train.BytesList(value=[encoded_image.numpy()]))
-                        }
-                        example = tf.train.Example(features=tf.train.Features(feature=feature))
-                        tfr_example = example.SerializeToString()
-                        writer.write(tfr_example)
+                    with open(image_path, 'wb') as f:
+                        image = Image.open(io.BytesIO(response.content))
+                        new_size = (512, 383)
+                        resized_image = image.resize(new_size, Image.LANCZOS)      
+                        new_image_height = 512
+                        new_image = Image.new("RGB", (512, new_image_height), "black")
+                        new_image.paste(resized_image, (0, 192))
+                        new_image.save(image_path)
                     n_img += 1
                 else:
                     print(f'Failed to download: {row["Image URL"]}')
     print("Saved houses from", n_counties, "counties, completed in", time.time() - start_time, "seconds.")
 
+# def augment_image(image, n_new_imgs=3):
+#     '''
+#     Apply image augmentations.
+#     '''
+#     new_imgs = [] 
+#     image = tf.image.decode_jpeg(image, channels=3)
+#     img1 = tf.image.random_flip_left_right(image)
+#     img2 = tf.image.random_brightness(image, max_delta=0.2)
+#     img2 = tf.image.random_contrast(img2, max_delta=0.2)
+#     rotated = tf.image.rot90(image)
+#     image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
+#     image = tf.image.random_saturation(image, lower=0.8, upper=1.2)
+#     image = tf.image.random_hue(image, max_delta=0.2)
+#     image = tf.image.encode_jpeg(tf.cast(image, tf.uint8))
+#     return image
+
+def zip2tfr():
+    '''
+    Save all images in output_images to a .tfrecord file - this is an efficient way 
+    to store a dataset for the GAN. Tensorflow is imported here as it takes a long time to import
+    and should only be imported when necessary.
+    '''
+
+    tfrecord_file_path = 'output.tfrecord'
+    
+    if not (os.path.exists("output_training_set.zip")):
+        zip_files()
+    count = 0
+    with TFRecordWriter(tfrecord_file_path) as writer:
+        with zipfile.ZipFile("output_training_set.zip", "r") as zip_ref:
+            for file_name in zip_ref.namelist():
+                image_data = zip_ref.read(file_name)
+                
+                feature = {
+                    'image': Feature(bytes_list=BytesList(value=[image_data]))
+                }
+                
+                example = Example(features=Features(feature=feature))
+                writer.write(example.SerializeToString()) #SerializeToString turns the example into a binary string
+                count += 1
+    print(f"TFRecord file created from zip: {tfrecord_file_path}, {count} images written.")
+    
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("To scrape url by location: python3 zillow_scraper.py county-st county-st...")
-        print("To convert csv to tfr: python3 scraper.py csv2tfr")
+        print("To convert csv to img: python3 zillow_scraper.py csv2tfr")
+        print("To zip: python3 zillow_scraper.py zip")
+        print("To convert zip to tfr: python3 zillow_scraper.py tfr")
     else:
         if sys.argv[1] == "csv2tfr":
-            csv2tfr()
+            csv2img()
+        elif sys.argv[1] == "zip":
+            zip_files()
+        elif sys.argv[1] == "tfr":
+            zip2tfr()
         else:
             locations = sys.argv[1:]
             scrape_zillow(locations)
