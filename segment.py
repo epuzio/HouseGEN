@@ -106,7 +106,7 @@ def slice_imgs():
             img_colored = logits2image(img)
             for i, img in enumerate(img_colored):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                cv2.imwrite(os.path.join('segmented_images_colored/class_'+i+fname),cv2.cvtColor(img, cv2.COLOR_BGR2RGB))   
+                cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(img, cv2.COLOR_BGR2RGB))   
                 print(fname)
             ctr += 1
         
