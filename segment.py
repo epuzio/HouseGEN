@@ -106,13 +106,13 @@ def place_imgs(img_class=int, num_imgs=int, output_name=str):
         img = imageio.imread(os.path.join(IMAGE_DIRECTORY+'/class_'+str(img_class)+"/"+ fname)) 
         img = np.pad(img, ((0, base_dims[0] - img.shape[2]), (0,  base_dims[1] - img.shape[1]), (0, 0)), mode='constant', constant_values=0)
 
-        # #random scatter
-        # x = random.uniform(0, base_dims[1])
-        # y = random.uniform(0, base_dims[0])
+        #random scatter
+        x = random.uniform(-300, base_dims[1]-300)
+        y = random.uniform(-300, base_dims[0]-300)
 
-        #follow parabola
-        x = random.uniform(0, base_dims[1])
-        y = parabola(x) + int(random.uniform(-1.0, 1.0)*(base_dims[0]/8))
+        # #follow parabola
+        # x = random.uniform(-300, base_dims[1]-300)
+        # y = parabola(x) + int(random.uniform(-1.0, 1.0)*(base_dims[0]/8))
 
         # #center
         # x_gutter = base_dims[1]/8
@@ -140,11 +140,12 @@ if __name__ == "__main__":
         tf.compat.v1.enable_eager_execution()
         slice_imgs(int(sys.argv[2]))
     if sys.argv[1] == "collage":
-        classes = int(sys.argv[3:])
+        classes = [int(i) for i in sys.argv[4:]]
         repetitions = int(sys.argv[2])
+        samples = int(sys.argv[3])
         for i in range(len(classes)): 
             for j in range(repetitions):
-                place_imgs(classes[i], 10, OUTPUT_DIRECTORY+'collage_'+str((repetitions*i) + j)+'.png')
+                place_imgs(classes[i], samples, OUTPUT_DIRECTORY+'collage_'+str((repetitions*i) + j)+'.png')
     else:
         print("To slice images: python segment.py slice number_of_images")
-        print("To slice images: python segment.py collage number_of_repetitions number_of_classes")
+        print("To slice images: python segment.py collage number_of_repetitions num_samples class_numbers")
