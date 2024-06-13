@@ -101,15 +101,8 @@ def slice_imgs():
         for fname in sorted(os.listdir(image_dir)):
             if ctr > 5:
                 break
-            original_img = imageio.imread(os.path.join(image_dir, fname))[:IMAGE_HEIGHT_CROPPED, :] 
+            original_img = imageio.imread(os.path.join(image_dir, fname))[IMAGE_HEIGHT - IMAGE_HEIGHT_CROPPED:, :] 
             img = np.expand_dims(original_img, axis=0)
-            print("img type: ", type(img))
-            print("img shape: ", img.shape)
-            print("JPEG Image Data Type: ", img.dtype)
-            print("JPEG Image Shape: ", img.shape)
-            print("JPEG Image Min: ", np.min(img))
-            print("JPEG Image Max: ", np.max(img))
-           
             probs = sess.run(softmax, {image_input: img})
             img = tf.squeeze(probs).eval()
             img_colored = logits2image(img)
@@ -118,11 +111,15 @@ def slice_imgs():
                 print("sorted_img shape: ", sorted_img.shape)
                 print("img shape: ", original_img.shape)
                 masked_img = cv2.bitwise_and(original_img, sorted_img, mask=None)
-                if (np.all(masked_img > 20)):
-                    if not os.path.exists('segmented_images_colored/class_'+str(i)):
-                        os.mkdir('segmented_images_colored/class_'+str(i))
-                    cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(masked_img, cv2.COLOR_BGR2RGB))   
-                    print(fname)
+                print(masked_img.max())
+                print(masked_img.min())
+                flat_masked_img = masked_img.flatten()
+                if (np.count_nonzero(flat_masked_img) < IMAGE_HEIGHT_CROPPED*IMAGE_WIDTH*3/32): #certain percent of image must be colored
+                    continue
+                if not os.path.exists('segmented_images_colored/class_'+str(i)):
+                    os.mkdir('segmented_images_colored/class_'+str(i))
+                cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(masked_img, cv2.COLOR_BGR2RGB))   
+                print(fname)
             ctr += 1
         
 if __name__ == "__main__":
