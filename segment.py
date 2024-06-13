@@ -17,6 +17,7 @@ import tempfile
 import imageio
 import numpy as np
 import cv2
+import random
 
 IMAGE_HEIGHT = 512
 IMAGE_HEIGHT_CROPPED = 300
@@ -26,26 +27,6 @@ NUM_IMGS = 8
 OUTPUT_PATH = "output_images"
 NUM_CLASSES = 19
 
-def decode_image(image):
-    '''
-    Decode the image from the tfrecord file.
-    '''
-    image = tf.io.decode_jpeg(image, channels=3)
-    image = tf.reshape(image, [IMAGE_HEIGHT, IMAGE_WIDTH, 3])
-    image = tf.cast(image, tf.uint8)
-    image = tf.io.encode_png(image)
-    return image
-
-def read_tfrecord(example):
-    '''
-    Decode the image from the tfrecord file using decode_image
-    '''
-    tfrecord_format = {
-        "image": tf.io.FixedLenFeature([], tf.string)
-    }
-    example = tf.io.parse_single_example(example, tfrecord_format)
-    image = decode_image(example['image'])
-    return image
 
 def load_inference_graph(path):
     with tf.io.gfile.GFile(path, 'rb') as f:
@@ -73,9 +54,6 @@ def logits2image(logits):
 
 def slice_imgs():
     print("slicing images")
-    # dataset = tf.data.TFRecordDataset(TF_RECORD_PATH)
-    # dataset = dataset.map(read_tfrecord)
-
     print("loading inference graph")
     graph = load_inference_graph('frozen_inference_graph.pb')
     image_input = graph.get_tensor_by_name('prefix/ImageTensor:0')
@@ -84,23 +62,18 @@ def slice_imgs():
     print("softmax input shape: ", softmax.shape)
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
-
         
-    # Create output directories in the image folder
+    # Create output directories
     if not os.path.exists('segmented_images_colored/'):
         os.mkdir('segmented_images_colored/') 
-        # for n in range(NUM_CLASSES):
-        #     os.mkdir('segmented_images_colored/class_' + str(n))
     
     print("Iterating through images")
 
-    ctr = 0
     image_dir = "images/"
     # image_dir = "test_img/"
     with tf.compat.v1.Session(graph=graph) as sess:
-        for fname in sorted(os.listdir(image_dir)):
-            if ctr > 5:
-                break
+        for i in range(5):
+            fname=random.choice(os.listdir(image_dir))
             original_img = imageio.imread(os.path.join(image_dir, fname))[IMAGE_HEIGHT - IMAGE_HEIGHT_CROPPED:, :] 
             img = np.expand_dims(original_img, axis=0)
             probs = sess.run(softmax, {image_input: img})
@@ -108,19 +81,22 @@ def slice_imgs():
             img_colored = logits2image(img)
             for i, sorted_img in enumerate(img_colored):
                 sorted_img = cv2.cvtColor(sorted_img, cv2.COLOR_BGR2RGB)
-                print("sorted_img shape: ", sorted_img.shape)
-                print("img shape: ", original_img.shape)
                 masked_img = cv2.bitwise_and(original_img, sorted_img, mask=None)
-                print(masked_img.max())
-                print(masked_img.min())
-                flat_masked_img = masked_img.flatten()
-                if (np.count_nonzero(flat_masked_img) < IMAGE_HEIGHT_CROPPED*IMAGE_WIDTH*3/32): #certain percent of image must be colored
+
+                flattened_img = masked_img.flatten()
+                if (np.count_nonzero(flattened_img) < IMAGE_HEIGHT_CROPPED * IMAGE_WIDTH * 3 / 12 or np.count_nonzero(flattened_img) > IMAGE_HEIGHT_CROPPED * IMAGE_WIDTH * 3 * .80):  # certain percent of image must be colored
                     continue
+                
+                if masked_img.shape[2] == 3:
+                    masked_img = cv2.cvtColor(masked_img, cv2.COLOR_RGB2RGBA)
+                print("masked_img shape: ", masked_img.shape)
+                mask = np.all(masked_img[:, :, :3] == [0, 0, 0], axis=-1)
+                masked_img[mask, 3] = 0
+
                 if not os.path.exists('segmented_images_colored/class_'+str(i)):
                     os.mkdir('segmented_images_colored/class_'+str(i))
-                cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(masked_img, cv2.COLOR_BGR2RGB))   
+                cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i), fname[:-4]+".png"), masked_img, [int(cv2.IMWRITE_PNG_COMPRESSION), 1])
                 print(fname)
-            ctr += 1
         
 if __name__ == "__main__":
     tf.compat.v1.enable_eager_execution()
