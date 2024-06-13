@@ -18,8 +18,9 @@ import imageio
 import numpy as np
 import cv2
 
-IMAGE_HEIGHT = 183
-IMAGE_WIDTH = 275
+IMAGE_HEIGHT = 512
+IMAGE_HEIGHT_CROPPED = 300
+IMAGE_WIDTH = 512
 TF_RECORD_PATH = "output.tfrecord"
 NUM_IMGS = 8
 OUTPUT_PATH = "output_images"
@@ -60,9 +61,9 @@ def logits2image(logits):
     print('logits called')
     image_classes = 19
     logits = logits.astype(np.uint8)
-    images = [np.zeros([IMAGE_HEIGHT,IMAGE_WIDTH,3],dtype=float) for _ in range(image_classes)]
+    images = [np.zeros([IMAGE_HEIGHT_CROPPED,IMAGE_WIDTH,3],dtype=float) for _ in range(image_classes)]
 
-    for i in range(IMAGE_HEIGHT):
+    for i in range(IMAGE_HEIGHT_CROPPED):
         for j in range(IMAGE_WIDTH):
             img_class = logits[i,j]
             images[img_class][i,j,:] = [255, 255, 255]
@@ -88,26 +89,40 @@ def slice_imgs():
     # Create output directories in the image folder
     if not os.path.exists('segmented_images_colored/'):
         os.mkdir('segmented_images_colored/') 
-        for n in range(NUM_CLASSES):
-            os.mkdir('segmented_images_colored/class_' + str(n))
+        # for n in range(NUM_CLASSES):
+        #     os.mkdir('segmented_images_colored/class_' + str(n))
     
     print("Iterating through images")
 
     ctr = 0
-    image_dir = "test_img/"
+    image_dir = "images/"
+    # image_dir = "test_img/"
     with tf.compat.v1.Session(graph=graph) as sess:
         for fname in sorted(os.listdir(image_dir)):
-            img = imageio.imread(os.path.join(image_dir, fname)) 
-            img = np.expand_dims(img, axis=0)
+            if ctr > 5:
+                break
+            original_img = imageio.imread(os.path.join(image_dir, fname))[:IMAGE_HEIGHT_CROPPED, :] 
+            img = np.expand_dims(original_img, axis=0)
             print("img type: ", type(img))
             print("img shape: ", img.shape)
+            print("JPEG Image Data Type: ", img.dtype)
+            print("JPEG Image Shape: ", img.shape)
+            print("JPEG Image Min: ", np.min(img))
+            print("JPEG Image Max: ", np.max(img))
+           
             probs = sess.run(softmax, {image_input: img})
             img = tf.squeeze(probs).eval()
             img_colored = logits2image(img)
-            for i, img in enumerate(img_colored):
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(img, cv2.COLOR_BGR2RGB))   
-                print(fname)
+            for i, sorted_img in enumerate(img_colored):
+                sorted_img = cv2.cvtColor(sorted_img, cv2.COLOR_BGR2RGB)
+                print("sorted_img shape: ", sorted_img.shape)
+                print("img shape: ", original_img.shape)
+                masked_img = cv2.bitwise_and(original_img, sorted_img, mask=None)
+                if (np.all(masked_img > 20)):
+                    if not os.path.exists('segmented_images_colored/class_'+str(i)):
+                        os.mkdir('segmented_images_colored/class_'+str(i))
+                    cv2.imwrite(os.path.join('segmented_images_colored/class_'+str(i)+"/"+fname),cv2.cvtColor(masked_img, cv2.COLOR_BGR2RGB))   
+                    print(fname)
             ctr += 1
         
 if __name__ == "__main__":
