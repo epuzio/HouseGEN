@@ -31,7 +31,7 @@ def scrape_zillow(locations):
                 "Cache-Control": "max-age=0",
             }
             response = requests.get(url, headers=headers)
-            print("Response status code:", response.status_code) #if it's 200, success. if it's 403.... :(
+            print("Response status code:", response.status_code) #if it's 200, success. if it's 403, forbidden (probably header issue)
             if response.status_code == 200: #web page fetched successfully
                 soup = BeautifulSoup(response.content, "html.parser")
                 img_tags = soup.find_all('img', src=lambda x: x and x.startswith('https://photos.zillowstatic.com/fp/'))
@@ -64,24 +64,13 @@ def scrape_petfinder(locations): #copy+pasting because we aren't searching by mu
         }
         response = requests.get(url, headers=headers)
         print("Response status code:", response.status_code) #if it's 200, success. if it's 403.... :(
-        if response.status_code == 200: #web page fetched successfully
+        if response.status_code == 200: # web page fetched successfully
             soup = BeautifulSoup(response.content, "html.parser")
-            # Find the parent div of the pfdc-animal-search-results element
-            # parent_div = soup.find('pfdc-animal-search-results').parent
+            #find parent div of the pfdc-animal-search-results element
             result_divs = soup.find('pfdc-animal-search-results').find_all('div', class_='result')
 
             print(result_divs)
 
-            # Extract the text content of the parent div
-            # content = parent_div.get_text(strip=True)
-            # print(content)
-
-            # prettied = (soup.prettify())
-            # lines = prettied.splitlines()
-            # with open("test.csv", mode='w', newline='', encoding='utf-8') as csvfile:
-            #     csvwriter = csv.writer(csvfile)
-            #     csvwriter.writerows([[line] for line in lines])
-                
             img_tags = soup.find_all('img')
             print("Number of images found:", len(img_tags))
             print(img_tags)
